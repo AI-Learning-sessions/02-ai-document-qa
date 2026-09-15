@@ -1,11 +1,11 @@
+import pymupdf
 import chromadb
 import os
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 from google import genai
 
-
-# Load environment variables
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
@@ -14,75 +14,57 @@ if not api_key:
     print("GEMINI_API_KEY not found.")
     exit()
 
-# Create clients
-chroma_client = chromadb.Client()
 gemini_client = genai.Client(api_key=api_key)
 
 
-# Create collection
+pdf_path = "data/network_protocols.pdf"
+
+document = pymupdf.open(pdf_path)
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=100
+)
+
+chunks = []
+
+for page_number, page in enumerate(document):
+    text = page.get_text().strip()
+
+    if not text:
+        continue
+
+    page_chunks = text_splitter.split_text(text)
+
+    for chunk in page_chunks:
+        chunks.append({
+            "text": chunk,
+            "page": page_number + 1,
+            "source": "network_protocols.pdf"
+        })
+
+
+chroma_client = chromadb.Client()
+
 collection = chroma_client.get_or_create_collection(
-    name="learning_documents"
+    name="network_protocols"
 )
 
 
-# Documents
-documents = [
-    "Supervised learning uses labeled data to train a model.",
-    "Unsupervised learning uses unlabeled data to discover patterns.",
-    "Neural networks are computing systems inspired by biological brains.",
-    "Chocolate cake is made using ingredients such as flour, sugar, and eggs.",
-    "Thomas Edison invented the practical electric light bulb.",
-    "Alexander Graham Bell is commonly credited with inventing the telephone."
-]
+documents = []
+ids = []
+metadatas = []
+
+for i, chunk in enumerate(chunks):
+    documents.append(chunk["text"])
+    ids.append(f"chunk_{i + 1}")
+
+    metadatas.append({
+        "source": chunk["source"],
+        "page": chunk["page"]
+    })
 
 
-# IDs
-ids = [
-    "chunk_1",
-    "chunk_2",
-    "chunk_3",
-    "chunk_4",
-    "chunk_5",
-    "chunk_6"
-]
-
-
-# Metadata
-metadatas = [
-    {
-        "source": "machine_learning.txt",
-        "topic": "supervised_learning",
-        "page": 1
-    },
-    {
-        "source": "machine_learning.txt",
-        "topic": "unsupervised_learning",
-        "page": 2
-    },
-    {
-        "source": "neural_networks.txt",
-        "topic": "neural_networks",
-        "page": 1
-    },
-    {
-        "source": "cooking.txt",
-        "topic": "cooking",
-        "page": 3
-    },
-    {
-        "source": "inventions.txt",
-        "topic": "electricity",
-        "page": 4
-    },
-    {
-        "source": "inventions.txt",
-        "topic": "telephone",
-        "page": 5
-    }
-]
-
-
-# Store documents in Chroma
 collection.add(
     ids=ids,
     documents=documents,
@@ -92,37 +74,36 @@ collection.add(
 print("Documents stored:", collection.count())
 
 
-# User question
-query = "Who invented the telephone?"
+query = "What are the seven layers of the OSI model?"
 
-# Retrieve relevant document
 results = collection.query(
     query_texts=[query],
-    n_results=1
+    n_results=3
 )
 
+context = "\n\n".join(results["documents"][0])
 
-# Extract retrieved information
-context = results["documents"][0][0]
-source = results["metadatas"][0][0]["source"]
-page = results["metadatas"][0][0]["page"]
+print("\nSearch results:")
 
+for i, document in enumerate(results["documents"][0]):
+    print(f"\n--- Result {i + 1} ---")
 
-print("\nRetrieved context:")
-print(context)
+    print("Document:")
+    print(document)
 
-print("\nSource:")
-print(source)
+    print("\nID:")
+    print(results["ids"][0][i])
 
-print("Page:")
-print(page)
+    print("\nMetadata:")
+    print(results["metadatas"][0][i])
 
+    print("\nDistance:")
+    print(results["distances"][0][i])
 
-# Create RAG prompt
 prompt = f"""
 You are a document question-answering assistant.
 
-Answer the user's question using only the provided context.
+Answer the question using only the provided context.
 
 If the answer cannot be found in the context, say:
 "I could not find the answer in the provided document."
@@ -136,17 +117,10 @@ Question:
 Answer:
 """
 
-
-# Send context + question to Gemini
 response = gemini_client.interactions.create(
     model="gemini-3.6-flash",
     input=prompt
 )
 
-
-# Get answer
-answer = response.output_text
-
-
 print("\nAnswer:")
-print(answer)
+print(response.output_text)
