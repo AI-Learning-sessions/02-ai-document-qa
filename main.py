@@ -73,40 +73,53 @@ collection.add(
 
 print("Documents stored:", collection.count())
 
+while True:
+    query = input("\nAsk a question about the document (or type 'exit'): ").strip()
 
-query = "What are the seven layers of the OSI model?"
+    if not query:
+        print("Please enter a question.")
+        continue
 
-results = collection.query(
-    query_texts=[query],
-    n_results=3
-)
+    if query.lower() == "exit":
+        print("Goodbye!")
+        break
 
-context = "\n\n".join(results["documents"][0])
+    # Retrieve relevant chunks
+    results = collection.query(
+        query_texts=[query],
+        n_results=3
+    )
 
-print("\nSearch results:")
+    # Filter results by distance
+    DISTANCE_THRESHOLD = 1.4
 
-for i, document in enumerate(results["documents"][0]):
-    print(f"\n--- Result {i + 1} ---")
+    filtered_documents = []
+    filtered_metadatas = []
 
-    print("Document:")
-    print(document)
+    for i, distance in enumerate(results["distances"][0]):
+        if distance <= DISTANCE_THRESHOLD:
+            filtered_documents.append(results["documents"][0][i])
+            filtered_metadatas.append(results["metadatas"][0][i])
 
-    print("\nID:")
-    print(results["ids"][0][i])
+    # No relevant information found
+    if not filtered_documents:
+        print("\nI could not find relevant information in the document.")
+        continue
 
-    print("\nMetadata:")
-    print(results["metadatas"][0][i])
+    # Combine retrieved chunks
+    context = "\n\n".join(filtered_documents)
 
-    print("\nDistance:")
-    print(results["distances"][0][i])
-
-prompt = f"""
+    # Create prompt
+    prompt = f"""
 You are a document question-answering assistant.
 
 Answer the question using only the provided context.
 
-If the answer cannot be found in the context, say:
-"I could not find the answer in the provided document."
+Rules:
+- Do not use outside knowledge.
+- If the answer cannot be found in the context, say:
+  "I could not find the answer in the provided document."
+- Keep the answer clear and concise.
 
 Context:
 {context}
@@ -117,10 +130,27 @@ Question:
 Answer:
 """
 
-response = gemini_client.interactions.create(
-    model="gemini-3.6-flash",
-    input=prompt
-)
+    # Generate answer using Gemini
+    try:
+        response = gemini_client.interactions.create(
+            model="gemini-3.6-flash",
+            input=prompt
+        )
 
-print("\nAnswer:")
-print(response.output_text)
+        print("\nAnswer:")
+        print(response.output_text)
+
+        print("\nSources:")
+
+        seen_sources = set()
+
+        for metadata in filtered_metadatas:
+            source = f"{metadata['source']} — Page {metadata['page']}"
+
+            if source not in seen_sources:
+                print(f"- {source}")
+                seen_sources.add(source)
+
+    except Exception as e:
+        print("\nGemini API error:")
+        print(e)
