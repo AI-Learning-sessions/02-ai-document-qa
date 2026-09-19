@@ -1,10 +1,14 @@
-import pymupdf
-import chromadb
 import os
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+import chromadb
+
 from dotenv import load_dotenv
 from google import genai
+
+
+# -----------------------------
+# 1. Load environment variables
+# -----------------------------
 
 load_dotenv()
 
@@ -14,67 +18,47 @@ if not api_key:
     print("GEMINI_API_KEY not found.")
     exit()
 
-gemini_client = genai.Client(api_key=api_key)
 
+# -----------------------------
+# 2. Create Gemini client
+# -----------------------------
 
-pdf_path = "data/network_protocols.pdf"
-
-document = pymupdf.open(pdf_path)
-
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=100
+gemini_client = genai.Client(
+    api_key=api_key
 )
 
-chunks = []
 
-for page_number, page in enumerate(document):
-    text = page.get_text().strip()
+# -----------------------------
+# 3. Connect to persistent Chroma
+# -----------------------------
 
-    if not text:
-        continue
-
-    page_chunks = text_splitter.split_text(text)
-
-    for chunk in page_chunks:
-        chunks.append({
-            "text": chunk,
-            "page": page_number + 1,
-            "source": "network_protocols.pdf"
-        })
+chroma_client = chromadb.PersistentClient(
+    path="chroma_db"
+)
 
 
-chroma_client = chromadb.Client()
+# -----------------------------
+# 4. Get collection
+# -----------------------------
 
 collection = chroma_client.get_or_create_collection(
     name="network_protocols"
 )
 
 
-documents = []
-ids = []
-metadatas = []
-
-for i, chunk in enumerate(chunks):
-    documents.append(chunk["text"])
-    ids.append(f"chunk_{i + 1}")
-
-    metadatas.append({
-        "source": chunk["source"],
-        "page": chunk["page"]
-    })
+print("Documents available:", collection.count())
 
 
-collection.add(
-    ids=ids,
-    documents=documents,
-    metadatas=metadatas
-)
-
-print("Documents stored:", collection.count())
+# -----------------------------
+# 5. Start Q&A
+# -----------------------------
 
 while True:
-    query = input("\nAsk a question about the document (or type 'exit'): ").strip()
+
+    query = input(
+        "\nAsk a question about the document "
+        "(or type 'exit'): "
+    ).strip()
 
     if not query:
         print("Please enter a question.")
@@ -84,32 +68,66 @@ while True:
         print("Goodbye!")
         break
 
+
+    # -----------------------------
     # Retrieve relevant chunks
+    # -----------------------------
+
     results = collection.query(
         query_texts=[query],
         n_results=3
     )
 
-    # Filter results by distance
+
+    # -----------------------------
+    # Filter results
+    # -----------------------------
+
     DISTANCE_THRESHOLD = 1.4
 
     filtered_documents = []
     filtered_metadatas = []
 
     for i, distance in enumerate(results["distances"][0]):
-        if distance <= DISTANCE_THRESHOLD:
-            filtered_documents.append(results["documents"][0][i])
-            filtered_metadatas.append(results["metadatas"][0][i])
 
-    # No relevant information found
+        if distance <= DISTANCE_THRESHOLD:
+
+            filtered_documents.append(
+                results["documents"][0][i]
+            )
+
+            filtered_metadatas.append(
+                results["metadatas"][0][i]
+            )
+
+
+    # -----------------------------
+    # No relevant information
+    # -----------------------------
+
     if not filtered_documents:
-        print("\nI could not find relevant information in the document.")
+
+        print(
+            "\nI could not find relevant information "
+            "in the document."
+        )
+
         continue
 
-    # Combine retrieved chunks
-    context = "\n\n".join(filtered_documents)
 
+    # -----------------------------
+    # Build context
+    # -----------------------------
+
+    context = "\n\n".join(
+        filtered_documents
+    )
+
+
+    # -----------------------------
     # Create prompt
+    # -----------------------------
+
     prompt = f"""
 You are a document question-answering assistant.
 
@@ -130,8 +148,13 @@ Question:
 Answer:
 """
 
-    # Generate answer using Gemini
+
+    # -----------------------------
+    # Generate answer
+    # -----------------------------
+
     try:
+
         response = gemini_client.interactions.create(
             model="gemini-3.6-flash",
             input=prompt
@@ -140,17 +163,30 @@ Answer:
         print("\nAnswer:")
         print(response.output_text)
 
+
+        # -----------------------------
+        # Display sources
+        # -----------------------------
+
         print("\nSources:")
 
         seen_sources = set()
 
         for metadata in filtered_metadatas:
-            source = f"{metadata['source']} — Page {metadata['page']}"
+
+            source = (
+                f"{metadata['source']} — "
+                f"Page {metadata['page']}"
+            )
 
             if source not in seen_sources:
+
                 print(f"- {source}")
+
                 seen_sources.add(source)
 
+
     except Exception as e:
+
         print("\nGemini API error:")
         print(e)
