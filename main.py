@@ -6,12 +6,17 @@ from dotenv import load_dotenv
 from google import genai
 
 
-# -----------------------------
-# 1. Load environment variables
-# -----------------------------
+CHROMA_PATH = "chroma_db"
+COLLECTION_NAME = "network_protocols"
 
+DISTANCE_THRESHOLD = 1.4
+
+
+# Load environment variables
 load_dotenv()
 
+
+# Get Gemini API key
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
@@ -19,40 +24,27 @@ if not api_key:
     exit()
 
 
-# -----------------------------
-# 2. Create Gemini client
-# -----------------------------
-
+# Create Gemini client
 gemini_client = genai.Client(
     api_key=api_key
 )
 
 
-# -----------------------------
-# 3. Connect to persistent Chroma
-# -----------------------------
-
+# Connect to persistent Chroma database
 chroma_client = chromadb.PersistentClient(
-    path="chroma_db"
+    path=CHROMA_PATH
 )
 
 
-# -----------------------------
-# 4. Get collection
-# -----------------------------
-
 collection = chroma_client.get_or_create_collection(
-    name="network_protocols"
+    name=COLLECTION_NAME
 )
 
 
 print("Documents available:", collection.count())
 
 
-# -----------------------------
-# 5. Start Q&A
-# -----------------------------
-
+# Question-answering loop
 while True:
 
     query = input(
@@ -60,33 +52,28 @@ while True:
         "(or type 'exit'): "
     ).strip()
 
+
     if not query:
         print("Please enter a question.")
         continue
+
 
     if query.lower() == "exit":
         print("Goodbye!")
         break
 
 
-    # -----------------------------
     # Retrieve relevant chunks
-    # -----------------------------
-
     results = collection.query(
         query_texts=[query],
         n_results=3
     )
 
 
-    # -----------------------------
-    # Filter results
-    # -----------------------------
-
-    DISTANCE_THRESHOLD = 1.4
-
+    # Filter results based on distance
     filtered_documents = []
     filtered_metadatas = []
+
 
     for i, distance in enumerate(results["distances"][0]):
 
@@ -101,10 +88,7 @@ while True:
             )
 
 
-    # -----------------------------
-    # No relevant information
-    # -----------------------------
-
+    # No relevant information found
     if not filtered_documents:
 
         print(
@@ -115,19 +99,13 @@ while True:
         continue
 
 
-    # -----------------------------
-    # Build context
-    # -----------------------------
-
+    # Combine retrieved chunks
     context = "\n\n".join(
         filtered_documents
     )
 
 
-    # -----------------------------
     # Create prompt
-    # -----------------------------
-
     prompt = f"""
 You are a document question-answering assistant.
 
@@ -149,35 +127,32 @@ Answer:
 """
 
 
-    # -----------------------------
-    # Generate answer
-    # -----------------------------
-
     try:
 
+        # Send request to Gemini
         response = gemini_client.interactions.create(
             model="gemini-3.6-flash",
             input=prompt
         )
 
+
         print("\nAnswer:")
         print(response.output_text)
 
 
-        # -----------------------------
         # Display sources
-        # -----------------------------
-
         print("\nSources:")
 
         seen_sources = set()
 
+
         for metadata in filtered_metadatas:
 
             source = (
-                f"{metadata['source']} — "
-                f"Page {metadata['page']}"
+                f"{metadata['source']} "
+                f"— Page {metadata['page']}"
             )
+
 
             if source not in seen_sources:
 

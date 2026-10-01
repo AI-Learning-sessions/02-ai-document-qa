@@ -9,10 +9,6 @@ CHROMA_PATH = "chroma_db"
 COLLECTION_NAME = "network_protocols"
 
 
-# -----------------------------
-# 1. Load PDF
-# -----------------------------
-
 print("Loading PDF...")
 
 document = pymupdf.open(PDF_PATH)
@@ -20,23 +16,17 @@ document = pymupdf.open(PDF_PATH)
 print("Number of pages:", len(document))
 
 
-# -----------------------------
-# 2. Create text splitter
-# -----------------------------
-
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=500,
     chunk_overlap=100
 )
 
 
-# -----------------------------
-# 3. Create chunks
-# -----------------------------
-
 chunks = []
 
+
 for page_number, page in enumerate(document):
+
     text = page.get_text().strip()
 
     if not text:
@@ -45,6 +35,7 @@ for page_number, page in enumerate(document):
     page_chunks = text_splitter.split_text(text)
 
     for chunk in page_chunks:
+
         chunks.append({
             "text": chunk,
             "page": page_number + 1,
@@ -55,33 +46,25 @@ for page_number, page in enumerate(document):
 print("Chunks created:", len(chunks))
 
 
-# -----------------------------
-# 4. Create persistent Chroma
-# -----------------------------
+print("Creating persistent Chroma database...")
 
 chroma_client = chromadb.PersistentClient(
     path=CHROMA_PATH
 )
 
 
-# -----------------------------
-# 5. Create collection
-# -----------------------------
-
 collection = chroma_client.get_or_create_collection(
     name=COLLECTION_NAME
 )
 
 
-# -----------------------------
-# 6. Prepare data
-# -----------------------------
-
 documents = []
 ids = []
 metadatas = []
 
+
 for i, chunk in enumerate(chunks):
+
     documents.append(chunk["text"])
 
     ids.append(f"chunk_{i + 1}")
@@ -92,10 +75,6 @@ for i, chunk in enumerate(chunks):
     })
 
 
-# -----------------------------
-# 7. Store chunks
-# -----------------------------
-
 collection.upsert(
     ids=ids,
     documents=documents,
@@ -104,4 +83,5 @@ collection.upsert(
 
 
 print("Documents stored:", collection.count())
+
 print("Ingestion completed successfully.")
