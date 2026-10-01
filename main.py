@@ -1,47 +1,26 @@
-import os
-
-import chromadb
-
-from dotenv import load_dotenv
-from google import genai
+from src.vector_store import get_collection
+from src.retriever import retrieve_relevant_chunks
+from src.llm import create_client, generate_answer
 
 
-CHROMA_PATH = "chroma_db"
-COLLECTION_NAME = "network_protocols"
+# Connect to ChromaDB
+collection = get_collection()
 
-DISTANCE_THRESHOLD = 1.4
+print(
+    "Documents available:",
+    collection.count()
+)
 
 
-# Load environment variables
-load_dotenv()
+# Create LLM client
+try:
 
+    llm_client = create_client()
 
-# Get Gemini API key
-api_key = os.getenv("GEMINI_API_KEY")
+except ValueError as e:
 
-if not api_key:
-    print("GEMINI_API_KEY not found.")
+    print(e)
     exit()
-
-
-# Create Gemini client
-gemini_client = genai.Client(
-    api_key=api_key
-)
-
-
-# Connect to persistent Chroma database
-chroma_client = chromadb.PersistentClient(
-    path=CHROMA_PATH
-)
-
-
-collection = chroma_client.get_or_create_collection(
-    name=COLLECTION_NAME
-)
-
-
-print("Documents available:", collection.count())
 
 
 # Question-answering loop
@@ -54,42 +33,30 @@ while True:
 
 
     if not query:
+
         print("Please enter a question.")
+
         continue
 
 
     if query.lower() == "exit":
+
         print("Goodbye!")
+
         break
 
 
     # Retrieve relevant chunks
-    results = collection.query(
-        query_texts=[query],
-        n_results=3
+    documents, metadatas = (
+        retrieve_relevant_chunks(
+            collection,
+            query
+        )
     )
 
 
-    # Filter results based on distance
-    filtered_documents = []
-    filtered_metadatas = []
-
-
-    for i, distance in enumerate(results["distances"][0]):
-
-        if distance <= DISTANCE_THRESHOLD:
-
-            filtered_documents.append(
-                results["documents"][0][i]
-            )
-
-            filtered_metadatas.append(
-                results["metadatas"][0][i]
-            )
-
-
-    # No relevant information found
-    if not filtered_documents:
+    # No relevant information
+    if not documents:
 
         print(
             "\nI could not find relevant information "
@@ -100,53 +67,27 @@ while True:
 
 
     # Combine retrieved chunks
-    context = "\n\n".join(
-        filtered_documents
-    )
-
-
-    # Create prompt
-    prompt = f"""
-You are a document question-answering assistant.
-
-Answer the question using only the provided context.
-
-Rules:
-- Do not use outside knowledge.
-- If the answer cannot be found in the context, say:
-  "I could not find the answer in the provided document."
-- Keep the answer clear and concise.
-
-Context:
-{context}
-
-Question:
-{query}
-
-Answer:
-"""
+    context = "\n\n".join(documents)
 
 
     try:
 
-        # Send request to Gemini
-        response = gemini_client.interactions.create(
-            model="gemini-3.6-flash",
-            input=prompt
+        answer = generate_answer(
+            llm_client,
+            query,
+            context
         )
 
-
         print("\nAnswer:")
-        print(response.output_text)
+        print(answer)
 
 
-        # Display sources
         print("\nSources:")
 
         seen_sources = set()
 
 
-        for metadata in filtered_metadatas:
+        for metadata in metadatas:
 
             source = (
                 f"{metadata['source']} "
@@ -164,4 +105,5 @@ Answer:
     except Exception as e:
 
         print("\nGemini API error:")
+
         print(e)
