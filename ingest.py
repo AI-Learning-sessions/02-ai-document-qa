@@ -2,15 +2,45 @@ from src.document_loader import load_and_split_document
 from src.vector_store import store_chunks
 
 
-print("Loading and processing PDF...")
+def main():
 
-chunks = load_and_split_document()
+    print("Loading and processing PDF...")
 
-print("Chunks created:", len(chunks))
+    try:
+
+        chunks = load_and_split_document()
+
+    except (FileNotFoundError, ValueError) as e:
+
+        print(f"\nIngestion error: {e}")
+        return
+
+    print(
+        "Chunks created:",
+        len(chunks)
+    )
+
+    try:
+
+        collection = store_chunks(chunks)
+
+    except Exception as e:
+
+        print(
+            "\nVector store error:",
+            e
+        )
+        return
+
+    print(
+        "Documents stored:",
+        collection.count()
+    )
+
+    print(
+        "Ingestion completed successfully."
+    )
 
 
-collection = store_chunks(chunks)
-
-print("Documents stored:", collection.count())
-
-print("Ingestion completed successfully.")
+if __name__ == "__main__":
+    main()
