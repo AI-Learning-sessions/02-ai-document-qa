@@ -47,7 +47,7 @@ while True:
 
 
     # Retrieve relevant chunks
-    documents, metadatas = (
+    documents, metadatas, distances = (
         retrieve_relevant_chunks(
             collection,
             query

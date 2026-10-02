@@ -12,8 +12,11 @@ def retrieve_relevant_chunks(
         n_results=n_results
     )
 
+
     filtered_documents = []
     filtered_metadatas = []
+    filtered_distances = []
+
 
     for i, distance in enumerate(
         results["distances"][0]
@@ -29,4 +32,13 @@ def retrieve_relevant_chunks(
                 results["metadatas"][0][i]
             )
 
-    return filtered_documents, filtered_metadatas
+            filtered_distances.append(
+                distance
+            )
+
+
+    return (
+        filtered_documents,
+        filtered_metadatas,
+        filtered_distances
+    )
