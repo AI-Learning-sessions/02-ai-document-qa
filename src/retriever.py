@@ -1,49 +1,54 @@
-from src.config import DISTANCE_THRESHOLD
+from src.config import (
+    DISTANCE_THRESHOLD,
+    RETRIEVAL_K,
+    MAX_CONTEXT_CHUNKS
+)
+
 from src.embeddings import create_embeddings
 
 
 def retrieve_relevant_chunks(
     collection,
-    query,
-    n_results=3
+    query
 ):
-
     query_embedding = create_embeddings(
         [query]
     )[0]
-
 
     results = collection.query(
         query_embeddings=[
             query_embedding.tolist()
         ],
-        n_results=n_results
+        n_results=RETRIEVAL_K
     )
-
 
     filtered_documents = []
     filtered_metadatas = []
     filtered_distances = []
 
+    seen_documents = set()
 
     for i, distance in enumerate(
         results["distances"][0]
     ):
 
-        if distance <= DISTANCE_THRESHOLD:
+        if distance > DISTANCE_THRESHOLD:
+            continue
 
-            filtered_documents.append(
-                results["documents"][0][i]
-            )
+        document = results["documents"][0][i]
+        metadata = results["metadatas"][0][i]
 
-            filtered_metadatas.append(
-                results["metadatas"][0][i]
-            )
+        if document in seen_documents:
+            continue
 
-            filtered_distances.append(
-                distance
-            )
+        seen_documents.add(document)
 
+        filtered_documents.append(document)
+        filtered_metadatas.append(metadata)
+        filtered_distances.append(distance)
+
+        if len(filtered_documents) >= MAX_CONTEXT_CHUNKS:
+            break
 
     return (
         filtered_documents,
