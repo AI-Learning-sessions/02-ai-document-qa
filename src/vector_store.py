@@ -20,6 +20,10 @@ def get_collection():
 
     return collection
 
+    """
+    Connect to the persistent Chroma collection.
+    """
+
 
 def store_chunks(chunks):
 
@@ -62,3 +66,7 @@ def store_chunks(chunks):
 
 
     return collection
+    """
+    Generate embeddings and store document chunks in Chroma.
+    """
+

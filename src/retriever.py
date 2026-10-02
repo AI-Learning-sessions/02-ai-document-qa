@@ -11,6 +11,14 @@ def retrieve_relevant_chunks(
     collection,
     query
 ):
+    """
+    Retrieve relevant document chunks for a query.
+
+    Returns:
+        documents: Relevant text chunks.
+        metadatas: Source and page information.
+        distances: Chroma similarity distances.
+    """
     query_embedding = create_embeddings(
         [query]
     )[0]

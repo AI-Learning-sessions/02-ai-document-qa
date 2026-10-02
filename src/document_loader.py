@@ -12,10 +12,17 @@ from src.config import (
 
 def load_and_split_document():
 
+    """
+    Load the PDF and split its text into chunks.
+
+    Returns:
+        A list of document chunks with source and page metadata.
+    """
+
     if not os.path.exists(PDF_PATH):
-        raise FileNotFoundError(
-            f"PDF file not found: {PDF_PATH}"
-        )
+          raise FileNotFoundError(
+              f"PDF file not found: {PDF_PATH}"
+          )
 
     document = pymupdf.open(PDF_PATH)
 

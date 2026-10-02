@@ -9,4 +9,13 @@ model = SentenceTransformer(
 
 
 def create_embeddings(texts):
+    """
+    Convert text into vector embeddings.
+
+    Args:
+        texts: List of text strings.
+
+    Returns:
+        NumPy array containing the embeddings.
+    """
     return model.encode(texts)
