@@ -1,4 +1,5 @@
 from src.config import DISTANCE_THRESHOLD
+from src.embeddings import create_embeddings
 
 
 def retrieve_relevant_chunks(
@@ -7,8 +8,15 @@ def retrieve_relevant_chunks(
     n_results=3
 ):
 
+    query_embedding = create_embeddings(
+        [query]
+    )[0]
+
+
     results = collection.query(
-        query_texts=[query],
+        query_embeddings=[
+            query_embedding.tolist()
+        ],
         n_results=n_results
     )
 
