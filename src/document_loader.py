@@ -49,7 +49,7 @@ def load_and_split_document():
             chunks.append({
                 "text": chunk,
                 "page": page_number + 1,
-                "source": "network_protocols.pdf"
+                "source": os.path.basename(PDF_PATH)
             })
 
     document.close()

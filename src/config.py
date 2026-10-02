@@ -14,4 +14,6 @@ RETRIEVAL_K = 10
 
 MAX_CONTEXT_CHUNKS = 3
 
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
 LLM_MODEL = "gemini-3.6-flash"
